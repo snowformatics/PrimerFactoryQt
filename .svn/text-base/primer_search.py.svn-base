@@ -1,0 +1,89 @@
+import subprocess
+import time
+import tempfile
+import os
+
+from biograpy import Panel, tracks, features
+#from gi.repository import Pango
+from Bio.SeqFeature import SeqFeature, FeatureLocation
+
+def start_search(sequence_file_location, database_file_location, missmatches):
+    """Start Primer Search with Bowtie."""
+
+    temp_bowtie_file = tempfile.mkstemp()
+    
+    assert os.path.exists(sequence_file_location)
+    assert os.path.exists(temp_bowtie_file[1])
+    
+    try:
+        subprocess.Popen(["bowtie", "-a", "-v", str(missmatches),  "-y", database_file_location, "-f",  
+                               sequence_file_location, temp_bowtie_file[1]])
+        time.sleep(1)
+        return 'Primer search done' 
+
+    except OSError:
+        return "Bowtie was not found! Please install <a href=\"http://bowtie-bio.sourceforge.net/index.shtml\">Bowtie</a>"
+        
+
+def create_new_database(db_name, database_file_location, db_location):
+    """Create a new db with Bowtie."""
+    
+    subprocess.Popen(["bowtie-build", database_file_location, db_location + str(db_name) + "_db_index"])
+    
+    time.sleep(1)
+    if os.path.exists(db_location + str(db_name) + "_db_index.rev.1.ebwt"):
+        return "Database successfully created!"
+    else:
+        return "Error, database could not be created!"
+    
+def draw_primer_search():
+    # Open result file and get data
+    f_data = open("/tmp/tmp1lya5S", 'r')
+    data = f_data.readlines()
+    f_data.close()
+    l = []
+    panel=Panel(fig_width=900, padding = 25, fig_dpi=100, fig_height=400)
+    test_track = tracks.BaseTrack(features.Simple(name = 'Query sequence', start = 0, end = 500 ),
+                                      sort_by = 'None')
+
+    for primer in data:
+        primer = primer.strip()
+        primer = primer.split('\t')
+        primer_name = primer[0]
+        primer_pos = primer[3]
+        orientation = primer[1]
+        primer_seq = primer[4]
+        if orientation == '+':
+            color = 'blue'
+            strand = 1
+            start = int(primer_pos)
+            end = int(primer_pos) + len(primer_seq)
+        elif orientation == '-':
+            color = 'black'
+            strand = -1
+            start = int(primer_pos)
+            end = int(primer_pos) + len(primer_seq)
+            
+        # Calculate identity   
+        try:
+            counts = primer[7].count(':')
+        except IndexError:
+            counts = 0
+        match_length = len(primer_seq) - counts
+        percent = match_length * 100 / len(primer_seq)
+        
+        # Add data to the table
+        l.append([str(percent), str(primer_name), str(len(primer_seq)),'1', primer_pos, primer_seq])
+
+        # Draw features
+        genefeat = SeqFeature(FeatureLocation(start, end), type = 'gene', strand=strand,)
+        d = features.GeneSeqFeature(genefeat, name=str(primer_name), head_length=15, 
+        head_width=.1, tail_width=.1, fc=color, ec=color, color_by_cm = False, shape='Right')
+
+        test_track.append(d)
+    panel.add_track(test_track)
+    panel.save('/tmp/basic_test.png')
+    print l
+        
+draw_primer_search()
+    

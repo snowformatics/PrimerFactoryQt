@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="Images">
+    <file>to_copy/images/Filesystem-folder-grey-open-icon.png</file>
+    <file>to_copy/images/left20.png</file>
+    <file>to_copy/images/right20.png</file>
+  </qresource>
+</RCC>

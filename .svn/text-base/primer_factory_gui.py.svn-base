@@ -1,0 +1,146 @@
+import sys
+import os
+import time
+import subprocess
+import tempfile
+import shutil
+
+from PyQt4 import QtCore, QtGui
+from ui_primer import Ui_MainWindow
+
+import primer_search
+
+def main(argv):
+    app = QtGui.QApplication(argv)
+    mainwindow = MyMainWindow()
+    mainwindow.show()
+    sys.exit(app.exec_())
+
+class MyMainWindow(QtGui.QMainWindow):
+    def __init__(self, *args):
+        QtGui.QMainWindow.__init__(self, *args)
+        self.ui = Ui_MainWindow()
+        
+        self.data_location = str(QtGui.QDesktopServices.storageLocation(QtGui.QDesktopServices.DataLocation))
+        self.home_location = str(QtGui.QDesktopServices.storageLocation(QtGui.QDesktopServices.HomeLocation))
+        self.temp_location = str(QtGui.QDesktopServices.storageLocation(QtGui.QDesktopServices.TempLocation))
+        self.db_location = self.data_location + 'primerfactory' + '/databases/'
+        
+        
+        import pyqtgraph.examples
+        pyqtgraph.examples.run()
+
+        self.ui.setupUi(self)
+        self.createConnects()
+        self.create_files()
+        self.update_comboboxes()
+        
+        self.ui.plainTextEdit.setFocus()
+        
+        
+    def createConnects(self):
+        self.ui.toolButton.clicked.connect(self.open_sequence_file)
+        self.ui.pushButton.clicked.connect(self.start_search)
+        self.ui.pushButton_2.clicked.connect(self.create_new_db)
+        
+    def create_files(self):
+        """Create some important folders and files."""
+        if not os.path.exists(self.data_location + 'primerfactory'):
+            os.popen("mkdir -p " + self.data_location + 'primerfactory')
+        if not os.path.exists(self.db_location):
+            os.popen("mkdir -p " + self.db_location)
+            f = open(self.data_location + 'primerfactory/databases/databases.txt', 'w')
+            f.close()
+    
+    #================================================================================================================
+    # Primer Search Tab1
+    def open_sequence_file(self):
+        """Open query sequence."""
+        sequence_file_location = QtGui.QFileDialog.getOpenFileName(
+                        self,
+                        u"Open a sequence file",
+                        self.home_location,
+                        u"Sequence (*.fasta *.fas *.txt)")
+        if not sequence_file_location.isNull():
+            temp_seq_file = tempfile.mkstemp()
+            assert os.path.exists(temp_seq_file[1])
+            shutil.copyfile(sequence_file_location, temp_seq_file[1])
+            f_seq = open(sequence_file_location, 'r')
+            sequence = f_seq.read()
+            if len(sequence) > 50.000:
+                self.ui.plainTextEdit.insertPlainText(sequence)
+            else:
+                self.ui.plainTextEdit.insertPlainText("Sequence to large to insert.\nFile saved, please press the search button.")
+            
+            f_seq.close()
+            
+    def start_search(self):
+        """Start Primer Search with Bowtie."""
+        sequence = str(self.ui.plainTextEdit.toPlainText())
+        if sequence != '':
+            temp_seq_file = tempfile.mkstemp()
+            seq_f = open(temp_seq_file[1], 'w')
+            
+            if sequence.find('>') == -1: 
+                seq_f.write('>My sequence' + '\n' + sequence + '\n')
+            else:
+                seq_f.write(sequence)
+            seq_f.close()
+            info_message = primer_search.start_search(temp_seq_file[1], 
+                                           self.db_location + self.ui.comboBox_2.currentText() + '_db_index',
+                                           self.ui.comboBox_3.currentText())
+            self.show_info_message(info_message)
+        else:
+            self.show_info_message('Please enter a sequence or upload a file!')
+            
+    def create_new_db(self):
+        """Create a new db with Bowtie."""
+        database_file_location = QtGui.QFileDialog.getOpenFileName(
+                        self,
+                        u"Open a database file",
+                        self.home_location,
+                        u"Sequence (*.fasta *.fas *.txt)")
+        
+        if not database_file_location.isNull():
+        
+            eingabe, ok = QtGui.QInputDialog.getText(
+                            self,
+                            u"Create a new database",
+                            u"Please enter a database name:",
+                            QtGui.QLineEdit.Normal, "")
+            if ok:
+                db_name = unicode(eingabe)
+               
+                info_message = primer_search.create_new_database(db_name, database_file_location, self.db_location)
+                self.show_info_message(info_message)
+
+
+      
+    def update_comboboxes(self):
+        """Get all databases and add them to the combox."""
+        db_list = set()
+        db_folder = os.listdir(self.db_location)
+        for db_name in db_folder:
+            if db_name.split('.')[0].endswith('db_index'):
+                db_list.add(db_name.split('_db_index')[0])
+        for db_index in db_list:
+            self.ui.comboBox_2.addItem(db_index)
+            
+        miss_match_lst = ['0', '1', '2', '3']
+        for missmatch in miss_match_lst:
+            self.ui.comboBox_3.addItem(missmatch)
+            
+    def show_info_message(self, message):
+        QtGui.QMessageBox.information(self,
+                    u"Information",
+                    message
+                    )
+        
+
+
+       
+
+if __name__ == "__main__":
+    main(sys.argv)
+
+
